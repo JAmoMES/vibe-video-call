@@ -42,7 +42,12 @@ export interface UseLinePlanetReturn {
   makeCall: (
     peerId: string,
     peerServiceId?: string,
-    options?: CallOptions
+    options?: CallOptions,
+    voipParams?: {
+      service: string;
+      orderId: string;
+      authToken: string;
+    }
   ) => Promise<void>;
   verifyCall: (
     peerId: string,
@@ -246,25 +251,36 @@ export function useLinePlanet({
     }
   }, [toast]);
 
-  // Make a call (caller side) - Updated with additional API parameters
+  // Make a call (caller side) - Updated with manual VoIP data input
   const makeCall = useCallback(
-    async (peerId: string, peerServiceId?: string, options?: CallOptions) => {
+    async (
+      peerId: string,
+      peerServiceId?: string,
+      options?: CallOptions,
+      voipParams?: {
+        service: string;
+        orderId: string;
+        authToken: string;
+      }
+    ) => {
       if (!isInitialized) {
         throw new Error("SDK not initialized");
       }
 
       try {
         setCallStatus("calling");
+        toast({
+          title: "Starting Call",
+          description: "Setting up call parameters...",
+        });
 
-        // Following the official documentation structure for makeCallParams with all parameters
         await linePlanetService.makeCall({
           myId: config.userId,
-          myServiceId: config.serviceId || "line-planet-call",
+          myServiceId: "LINEMAN-eval",
           peerId,
-          peerServiceId:
-            peerServiceId || config.serviceId || "line-planet-call",
+          peerServiceId: "LINEMAN-eval",
           accessToken: config.accessToken,
-          mediaType: "video",
+          mediaType: "audio",
           mediaHtmlElement: {
             my: {
               video: localVideoRef.current || undefined,
@@ -275,13 +291,40 @@ export function useLinePlanet({
             },
           },
           mediaStreamManager: linePlanetService.getMediaStreamManager(),
-          delegate: createDelegate(),
+          delegate: {
+            evtVerified: () => {
+              console.log("Call verified, ready to accept");
+              // params.delegate?.evtVerified?.();
+              // Automatically accept the call after verification
+              acceptCall();
+            },
+            evtConnected: () => {
+              console.log("Connected to call");
+              // params.delegate?.evtConnected?.();
+            },
+            evtDisconnected: (disconnectedParam: any) => {
+              console.log("Disconnected from call:", disconnectedParam);
+              // params.delegate?.evtDisconnected?.(
+              //   disconnectedParam?.reason || "Unknown"
+              // );
+            },
+            evtError: (error: any) => {
+              console.error("Call error:", error);
+              // params.delegate?.evtError?.(error);
+            },
+          },
 
           // Additional API parameters
           enableDataChannel: options?.enableDataChannel ?? false,
           userData: options?.userData,
-          useCloudRecording: options?.useCloudRecording ?? false,
+          useCloudRecording: options?.useCloudRecording ?? true,
           useCloudRelaying: options?.useCloudRelaying ?? false,
+
+          // VoIP parameters
+          service: voipParams?.service || "mart",
+          orderId: voipParams?.orderId || "",
+          calleeId: peerId,
+          authToken: voipParams?.authToken || config.accessToken,
         });
 
         toast({
@@ -316,16 +359,18 @@ export function useLinePlanet({
 
       try {
         setCallStatus("verifying");
+        toast({
+          title: "Getting Access Token",
+          description: "Fetching gateway access token for verification...",
+        });
 
         // Following the official documentation structure for verifyCallParams with all parameters
+        // Note: The gateway access token will be fetched internally in the verifyCall method
         await linePlanetService.verifyCall({
           myId: config.userId,
-          myServiceId: config.serviceId || "line-planet-call",
-          peerId,
-          peerServiceId:
-            peerServiceId || config.serviceId || "line-planet-call",
-          accessToken: config.accessToken,
-          mediaType: "video",
+          myServiceId: "LINEMAN-eval",
+          peerServiceId: "LINEMAN-eval",
+          mediaType: "audio",
           mediaHtmlElement: {
             my: {
               video: localVideoRef.current || undefined,

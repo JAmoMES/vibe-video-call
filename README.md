@@ -1,15 +1,8 @@
-# LinePlanet P2P Video Call App
+# LinePlanet Video Call App
 
-_Automatically synced with your [v0.dev](https://v0.dev) deployments_
+A modern, high-quality peer-to-peer video calling application powered by **LINE Planet SDK**.
 
-[![Deployed on Vercel](https://img.shields.io/badge/Deployed%20on-Vercel-black?style=for-the-badge&logo=vercel)](https://vercel.com/jamomes-projects/v0-line-planet-p2p-app)
-[![Built with v0](https://img.shields.io/badge/Built%20with-v0.dev-black?style=for-the-badge)](https://v0.dev/chat/projects/WkEkW54JZpq)
-
-## Overview
-
-A modern, high-quality peer-to-peer video calling application powered by **LINE Planet SDK**. This app provides enterprise-grade video calling capabilities with beautiful UI design and seamless user experience.
-
-### Features
+## Features
 
 - **🎥 HD Video Calling**: Crystal clear video quality with adaptive bitrate
 - **🔊 High-Quality Audio**: Echo cancellation and noise reduction
@@ -24,7 +17,6 @@ A modern, high-quality peer-to-peer video calling application powered by **LINE 
 - **Frontend**: Next.js 14, React 18, TypeScript
 - **Video SDK**: LINE Planet Kit (WebRTC-based)
 - **UI Components**: Radix UI + Tailwind CSS
-- **Deployment**: Vercel
 
 ## Getting Started
 
@@ -51,13 +43,7 @@ A modern, high-quality peer-to-peer video calling application powered by **LINE 
    yarn install
    ```
 
-3. **Set up LinePlanet credentials**
-
-   - Visit [LINE Planet Console](https://docs.lineplanet.me/)
-   - Create a new project and get your credentials
-   - Configure the app with your App ID and Access Token
-
-4. **Start the development server**
+3. **Start the development server**
 
    ```bash
    npm run dev
@@ -65,8 +51,8 @@ A modern, high-quality peer-to-peer video calling application powered by **LINE 
    yarn dev
    ```
 
-5. **Open in browser**
-   Navigate to `http://localhost:3000/lineplanet-call` to access the LinePlanet-powered video calling interface.
+4. **Open in browser**
+   Navigate to `http://localhost:3000` - the app will automatically redirect to the LinePlanet video call interface.
 
 ## LinePlanet Integration
 
@@ -83,17 +69,11 @@ interface LinePlanetConfig {
 }
 ```
 
-### Available Endpoints
-
-- `/` - Original WebRTC implementation
-- `/lineplanet-call` - LinePlanet SDK implementation
-- `/demo-incoming-call` - Incoming call UI demo
-
 ### Key Features
 
 1. **Peer-to-Peer Calling**
 
-   - Create or join rooms with simple room IDs
+   - Create or join rooms with simple peer IDs
    - Automatic peer discovery and connection
    - Real-time status updates
 
@@ -101,12 +81,12 @@ interface LinePlanetConfig {
 
    - Toggle video/audio on demand
    - Screen sharing capabilities
-   - Picture-in-picture local video
+   - Video preview before calling
 
 3. **Call Management**
-   - Room-based calling system
-   - Participant tracking
+   - Direct peer-to-peer calling system
    - Connection status monitoring
+   - Call verification and acceptance flow
 
 ## Development
 
@@ -115,16 +95,15 @@ interface LinePlanetConfig {
 ```
 ├── app/
 │   ├── lineplanet-call/     # LinePlanet video call page
-│   ├── demo-incoming-call/  # Incoming call demo
-│   └── page.tsx            # Original WebRTC implementation
+│   └── page.tsx             # Root page (redirects to lineplanet-call)
 ├── components/
-│   ├── ui/                 # Reusable UI components
-│   ├── incoming-call.tsx   # Incoming call component
-│   └── lineplanet-config.tsx # LinePlanet configuration
+│   ├── ui/                  # Reusable UI components
+│   └── lineplanet-call-client.tsx # Main LinePlanet call client
 ├── lib/
-│   └── lineplanet.ts       # LinePlanet service wrapper
+│   ├── lineplanet.ts        # LinePlanet service wrapper
+│   └── lineplanet-auth.ts   # Authentication helpers
 └── hooks/
-    └── use-lineplanet.ts   # React hook for LinePlanet
+    └── use-lineplanet.ts    # React hook for LinePlanet
 ```
 
 ### LinePlanet Service
@@ -136,10 +115,10 @@ The `LinePlanetService` class provides a clean interface for the LINE Planet SDK
 await linePlanetService.initialize(config);
 
 // Start a new call
-await linePlanetService.makeCall({ roomId, delegate });
+await linePlanetService.makeCall({ peerId, delegate });
 
 // Join an existing call
-await linePlanetService.verifyCall({ roomId, delegate });
+await linePlanetService.verifyCall({ peerId, delegate });
 
 // Media controls
 await linePlanetService.muteMic(false);
@@ -155,8 +134,9 @@ Use the `useLinePlanet` hook for easy integration:
 const {
   isInitialized,
   isInCall,
-  startCall,
-  joinCall,
+  makeCall,
+  verifyCall,
+  acceptCall,
   endCall,
   toggleVideo,
   toggleAudio,
@@ -165,34 +145,15 @@ const {
 } = useLinePlanet({ config });
 ```
 
-## Deployment
-
-### Environment Variables
-
-For production deployment, set up the following environment variables:
-
-```env
-NEXT_PUBLIC_LINEPLANET_APP_ID=your_app_id
-NEXT_PUBLIC_LINEPLANET_ENV=real
-NEXT_PUBLIC_LINEPLANET_ACCESS_TOKEN=your_access_token
-```
-
-### Vercel Deployment
-
-The project is automatically deployed to Vercel. Any changes pushed to the main branch will trigger a new deployment.
-
-**Live Demo**: [https://vercel.com/jamomes-projects/v0-line-planet-p2p-app](https://vercel.com/jamomes-projects/v0-line-planet-p2p-app)
-
 ## Usage
 
 ### Starting a Video Call
 
-1. Navigate to `/lineplanet-call`
-2. Configure your LinePlanet credentials (if needed)
-3. Enter a room ID or generate a new one
-4. Click "Start Call" to create a new room
-5. Share the room ID with participants
-6. Others can join using "Join Call" with the same room ID
+1. The app will automatically load the LinePlanet call interface
+2. Configure your LinePlanet credentials (App ID, User ID, Access Token)
+3. Use video preview to test your camera
+4. **For Caller**: Enter peer ID and click "Start Call"
+5. **For Callee**: Enter caller's peer ID, click "Verify Call", then "Accept Call"
 
 ### During a Call
 

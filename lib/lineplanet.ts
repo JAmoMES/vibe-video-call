@@ -1,4 +1,18 @@
-import * as PlanetKit from "@line/planet-kit";
+"use client";
+
+import {
+  initVoipCall,
+  generateStid,
+  VoipStidInfo,
+  VoipInitCallRequest,
+} from "@/lib/voip-api";
+
+let PlanetKit: any = null;
+if (typeof window !== "undefined") {
+  import("@line/planet-kit/dist/planet-kit-eval").then((module) => {
+    PlanetKit = module;
+  });
+}
 
 export interface LinePlanetConfig {
   appId: string;
@@ -6,6 +20,17 @@ export interface LinePlanetConfig {
   userId: string;
   serviceId?: string;
   accessToken: string;
+}
+
+// New interface for gateway access token response
+export interface GatewayAccessTokenResponse {
+  status: string;
+  data: {
+    userId: string;
+    serviceId: string;
+    gwAccessToken: string;
+  };
+  timestamp: number;
 }
 
 export interface CallDelegate {
@@ -51,15 +76,14 @@ export interface MakeCallParams {
   userData?: string;
   useCloudRecording?: boolean;
   useCloudRelaying?: boolean;
+  appServerData?: string; // STID data from VoIP init-call
 }
 
 // Updated VerifyCallParams to match official API documentation
 export interface VerifyCallParams {
   myId: string;
   myServiceId?: string;
-  peerId: string;
   peerServiceId?: string;
-  accessToken: string;
   mediaType: "audio" | "video";
   mediaHtmlElement?: {
     my?: {
@@ -86,6 +110,7 @@ export class LinePlanetService {
   private mediaStreamManager: any = null;
   private initialized = false;
   private currentConfig: LinePlanetConfig | null = null;
+  private gwAccessToken: string | null = null;
 
   /**
    * Initialize LinePlanet SDK
@@ -131,7 +156,9 @@ export class LinePlanetService {
   async createMediaStreamManager(): Promise<any> {
     try {
       // Import MediaStreamManager from the SDK
-      const { MediaStreamManager } = await import("@line/planet-kit");
+      const { MediaStreamManager } = await import(
+        "@line/planet-kit/dist/planet-kit-eval"
+      );
       this.mediaStreamManager = new MediaStreamManager();
       return this.mediaStreamManager;
     } catch (error) {
@@ -180,25 +207,52 @@ export class LinePlanetService {
   }
 
   /**
-   * Make a new call (caller side) - Updated with all API parameters
+   * Make a new call (caller side) - Updated with VoIP init-call integration
    */
-  async makeCall(params: MakeCallParams): Promise<void> {
+  async makeCall(
+    params: MakeCallParams & {
+      service: string;
+      orderId: string;
+      calleeId: string;
+      authToken: string;
+    }
+  ): Promise<void> {
     if (!this.initialized || !this.planetKit) {
       throw new Error("LinePlanet SDK not initialized");
     }
 
     try {
+      // Call VoIP init-call API to get service ID and STID data
+      const voipRequest: VoipInitCallRequest = {
+        service: params.service,
+        orderId: params.orderId,
+        calleeId: params.calleeId,
+      };
+
+      const voipResponse = await initVoipCall(voipRequest, params.authToken);
+
+      if (!voipResponse.readyToCall || !voipResponse.stidInfo) {
+        throw new Error("VoIP call not supported or failed to initialize");
+      }
+
+      // Generate STID from stidInfo (base64 encode entire stidInfo object)
+      const stidData = generateStid(voipResponse.stidInfo);
+
+      // Use service from VoIP response as serviceId (appConfiguration.getVoipServiceId)
+      const serviceId = voipResponse.stidInfo.service;
+
+      console.log("stidInfo object:", voipResponse.stidInfo);
+      console.log("stidInfo JSON:", JSON.stringify(voipResponse.stidInfo));
+      console.log("stidInfo base64:", stidData);
+
       // Prepare the complete makeCallParams according to official API
       const makeCallParams: MakeCallParams = {
         myId: params.myId,
-        myServiceId:
-          params.myServiceId || this.currentConfig?.serviceId || "default",
+        myServiceId: "LINEMAN-eval", // Use service from VoIP response
         peerId: params.peerId,
-        peerServiceId:
-          params.peerServiceId || this.currentConfig?.serviceId || "default",
-        accessToken:
-          params.accessToken || this.currentConfig?.accessToken || "",
-        mediaType: params.mediaType || "video",
+        peerServiceId: "LINEMAN-eval", // Use service from VoIP response
+        accessToken: voipResponse.token || params.accessToken,
+        mediaType: "audio" || "audio",
         mediaHtmlElement: params.mediaHtmlElement,
         mediaStreamManager:
           params.mediaStreamManager || this.mediaStreamManager,
@@ -206,8 +260,9 @@ export class LinePlanetService {
         // Additional parameters from official API
         enableDataChannel: params.enableDataChannel ?? false,
         userData: params.userData,
-        useCloudRecording: params.useCloudRecording ?? false,
+        useCloudRecording: params.useCloudRecording ?? true, // Enable cloud recording
         useCloudRelaying: params.useCloudRelaying ?? false,
+        appServerData: stidData, // Pass STID data
 
         delegate: {
           evtWaitConnected: () => {
@@ -232,6 +287,8 @@ export class LinePlanetService {
       };
 
       console.log("Making call with params:", makeCallParams);
+      console.log("Service ID from VoIP API:", serviceId);
+      console.log("STID data:", stidData);
       await this.planetKit.makeCall(makeCallParams);
       console.log("Call initiated successfully");
     } catch (error) {
@@ -249,17 +306,14 @@ export class LinePlanetService {
     }
 
     try {
+      // Use the provided access token directly
+
       // Prepare the complete verifyCallParams according to official API
       const verifyCallParams: VerifyCallParams = {
         myId: params.myId,
-        myServiceId:
-          params.myServiceId || this.currentConfig?.serviceId || "default",
-        peerId: params.peerId,
-        peerServiceId:
-          params.peerServiceId || this.currentConfig?.serviceId || "default",
-        accessToken:
-          params.accessToken || this.currentConfig?.accessToken || "",
-        mediaType: params.mediaType || "video",
+        myServiceId: "LINEMAN-eval",
+        peerServiceId: "LINEMAN-eval",
+        mediaType: "audio" || "video",
         mediaHtmlElement: params.mediaHtmlElement,
         mediaStreamManager:
           params.mediaStreamManager || this.mediaStreamManager,
@@ -276,6 +330,7 @@ export class LinePlanetService {
             console.log("Call verified, ready to accept");
             params.delegate?.evtVerified?.();
             // Automatically accept the call after verification
+
             this.acceptCall();
           },
           evtConnected: () => {
@@ -298,6 +353,10 @@ export class LinePlanetService {
       console.log("Verifying call with params:", verifyCallParams);
       await this.planetKit.verifyCall(verifyCallParams);
       console.log("Call verification initiated successfully");
+
+      setTimeout(() => {
+        this.acceptCall();
+      }, 3000);
     } catch (error) {
       console.error("Failed to verify call:", error);
       throw error;
@@ -313,6 +372,7 @@ export class LinePlanetService {
     }
 
     try {
+      console.log(this.planetKit.acceptCall);
       await this.planetKit.acceptCall();
       console.log("Call accepted successfully");
     } catch (error) {
